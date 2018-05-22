@@ -1,0 +1,50 @@
+const express = require('express');
+const path = require('path');
+var cors = require('cors')
+const bodyParser = require('body-parser');
+var proxy = require('http-proxy-middleware');
+//gremlin = require('gremlin');
+
+
+const port = process.env.PORT || 2081;
+const publicPath = '/';
+const endpoint = "ethereumgraph.cluster-cpqnxyktfkns.us-east-1-beta.rds.amazonaws.com";
+//const endpoint = "ethereumgraph.cluster-cpqnxyktfkns.us-east-1-beta.rds.amazonaws.com";
+//http://neptune-demo-first.us-east-1.elasticbeanstalk.com
+var client = null;
+try {
+ //client = gremlin.createClient(80, endpoint, { accept: "application/vnd.gremlin-v2.0+json", path: "/proxy" });
+}
+catch (error) {
+ console.error(error);
+}
+
+const app = express();
+app.use(cors());
+app.use('/', express.static(path.join(__dirname, '../public')));
+app.use(bodyParser.json());
+
+
+// PROXY
+var apiProxy = proxy('/graph', {
+    target: 'http://ethereumgraph.cluster-cpqnxyktfkns.us-east-1-beta.rds.amazonaws.com:8182/gremlin', ws: true, changeOrigin: true, proxyTimeout: 2000, logLevel: 'info', onProxyRes: function (proxyRes, req, res) {
+    console.log('[DEBUG : onProxyRes]');
+    console.log(proxyRes);
+    proxyRes.headers['Access-Control-Allow-Origin'] = '*';
+    proxyRes.headers['Access-Control-Allow-Headers'] = '*';
+},
+onProxyReq: function (proxyReq, req, res) {
+    proxyReq.setHeader('content-type', 'application/x-www-form-urlencoded;charset=utf-8;');
+    console.log('[DEBUG : onProxyReq]');
+    console.log(proxyReq);
+}
+});
+app.use(apiProxy);
+app.use('/healthcheck', require('../routes/healthcheck'));
+
+
+
+var server = app.listen(port, function () {
+ console.log(`App listening on: http://localhost:${port}`);
+});
+server.on('upgrade', apiProxy.upgrade);
